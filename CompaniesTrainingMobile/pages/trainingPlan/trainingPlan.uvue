@@ -1,0 +1,262 @@
+<template>
+	<view class="container">
+		<!-- 搜索框 -->
+		<u-search style="margin-top: 10rpx;" v-model="title" placeholder="输入培训标题搜索" :show-action="true" action-text="搜索"
+			@search="handleSearch" @custom="handleSearch"></u-search>
+
+		<!-- 空数据提示 -->
+		<u-empty v-if="list.length === 0 && !loading" mode="data" icon="http://cdn.uviewui.com/uview/empty/data.png"
+			text="没有找到相关培训计划" />
+
+		<!-- 数据列表 -->
+		<scroll-view v-else scroll-y style="height: calc(100vh - 100rpx);" @scrolltolower="loadMore">
+			<u-list>
+				<u-list-item v-for="(item, index) in list" :key="index">
+					<view class="uni-row Training-item">
+						<view class="info">
+							<text class="title">标题：{{item.title}}</text>
+							<text class="synopsis">内容：{{item.content}}</text>
+							<text class="synopsis">关联课程：{{item.courseTitle}}</text>
+							<div class="uni-row">
+								<text class="startTime">开始时间：{{item.startTime}}</text>
+								<text class="endTime">结束时间：{{item.endTime}}</text>
+							</div>
+						</view>
+					</view>
+				</u-list-item>
+
+				<!-- 加载状态提示 -->
+				<u-loadmore :status="loadStatus" :loading-text="loadingText" :loadmore-text="loadmoreText"
+					:nomore-text="nomoreText" />
+			</u-list>
+		</scroll-view>
+	</view>
+</template>
+
+<script>
+	import {
+		getTrainingPlans
+	} from '@/api/trainingPlan.js'
+
+	export default {
+		data() {
+			return {
+				user: [],
+				list: [],         // 数据列表
+				pageNum: 1,        // 当前页码
+				pageSize: 10,      // 每页数量
+				hasMore: true,     // 是否还有更多数据
+				loading: false,    // 防止重复请求
+				title: '',  // 搜索关键词
+				token: '',
+				loadStatus: 'loadmore',
+				loadingText: '正在加载...',
+				loadmoreText: '上拉加载更多',
+				nomoreText: '没有更多了',
+				popupVisible: false,
+				loadingDetail: false,
+				currentTraining: null
+			}
+		},
+		onLoad() {
+			this.user = JSON.parse(uni.getStorageSync('user'));
+			this.token = this.user.token
+			this.loadTrainingData()
+		},
+
+		methods: {
+			// 时间格式化方法
+			formatTime(timestamp) {
+				return timestamp ? this.$u.timeFormat(timestamp, 'yyyy-mm-dd') : '未知时间'
+			},
+
+			// 加载课程数据
+			async loadTrainingData() {
+				if (this.loading || !this.hasMore) return;
+
+				this.loading = true;
+				this.loadStatus = 'loading';
+
+				try {
+					const res = await getTrainingPlans({
+						pageNum: this.pageNum,
+						pageSize: this.pageSize,
+						title: this.title,
+						token: this.token
+					});
+					const pageData = res.data || {};
+
+					console
+						.log('分页数据:', {
+							list: pageData.list,
+							pages: pageData.pages,
+							total: pageData.total
+						});
+
+					const newList = pageData.list || [];
+					const totalPages = pageData.pages || 0;
+
+					// 数据合并逻辑
+					if (this.pageNum === 1) {
+						this.list = newList;
+					} else {
+						this.list = [...this.list, ...newList];
+					}
+
+					// 分页控制（根据pages字段）
+					this.hasMore = this.pageNum < totalPages;
+					this.loadStatus = this.hasMore ? 'loadmore' : 'nomore';
+
+					// 仅在还有更多数据时递增页码
+					if (this.hasMore && newList.length > 0) {
+						this.pageNum++;
+					}
+
+				} catch (error) {
+					console
+						.error('请求失败:', error);
+					uni
+						.showToast({
+							title: error.data?.msg || '加载失败',
+							icon: 'none'
+						});
+					this.loadStatus = 'loadmore';
+				} finally {
+					this.loading = false;
+				}
+				console.log("title", this.title)
+			},
+
+			handleSearch() {
+				// 重置时强制清空并重新加载
+				this.pageNum = 1;
+				this.hasMore = true;
+				this.list = [];
+				this.loadTrainingData();
+				console.log("token", this.token)
+			},
+
+			// 加载更多
+			loadMore() {
+				if (this.hasMore && !this.loading) {
+					this.loadTrainingData();
+				}
+			},
+
+			// 下拉刷新
+			onPullDownRefresh() {
+				this.pageNum = 1;
+				this.hasMore = true;
+				this.title = ''; // 可选：是否清空搜索条件
+
+				this.loadTrainingData().finally(() => {
+					uni.stopPullDownRefresh();
+				});
+			}
+		}
+	}
+</script>
+
+<style>
+	page {
+		--primary-color: #2979ff;
+		--success-color: #19be6b;
+		--warning-color: #ff9900;
+		--error-color: #fa3534;
+		--info-color: #909399;
+		--bg-color: #f8f9fa;
+		--text-primary: #303133;
+		--text-regular: #606266;
+		--text-secondary: #909399;
+		--border-color: #dcdfe6;
+	}
+</style>
+<style scoped>
+	
+	/* 容器增加内边距 */
+	.container {
+		padding: 20rpx 28rpx;
+		background: #f8f9fa;
+		min-height: 100vh;
+	}
+
+	/* 搜索框样式优化 */
+	.u-search {
+		border-radius: 16rpx !important;
+		overflow: hidden;
+		box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08);
+	}
+	
+	/* 搜索按钮样式 */
+	:deep(.u-search__action) {
+		background: #2979ff !important;
+		color: #fff !important;
+		border-radius: 12rpx;
+		padding: 0 28rpx !important;
+		margin-left: 20rpx;
+	}
+
+	/* 培训项改为卡片式设计 */
+	.Training-item {
+		background: #fff;
+		border-radius: 16rpx;
+		padding: 28rpx;
+		margin-bottom: 24rpx;
+		box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.06);
+		transition: all 0.3s;
+	}
+
+	/* 悬停效果 */
+	.Training-item:active {
+		transform: translateY(2rpx);
+		box-shadow: 0 2rpx 6rpx rgba(0,0,0,0.1);
+	}
+
+	/* 标题样式 */
+	.title {
+		font-size: 32rpx;
+		font-weight: 600;
+		color: #303133;
+		margin-bottom: 16rpx;
+		display: block;
+	}
+
+	/* 副标题样式 */
+	.synopsis {
+		font-size: 26rpx;
+		color: #606266;
+		line-height: 1.6;
+		margin-bottom: 12rpx;
+		display: block;
+	}
+
+	/* 时间容器布局 */
+	.uni-row {
+		display: flex;
+		justify-content: space-between;
+		margin-top: 16rpx;
+	}
+
+	/* 时间文字样式 */
+	.startTime, .endTime {
+		font-size: 24rpx;
+		color: #909399;
+		flex: 1;
+	}
+
+	/* 加载状态文字颜色 */
+	.u-loadmore {
+		color: #909399 !important;
+		padding: 32rpx 0;
+	}
+
+	/* 空状态图片调整 */
+	.u-empty {
+		padding-top: 100rpx;
+	}
+	.u-empty__image {
+		width: 280rpx !important;
+		height: 280rpx !important;
+	}
+</style>
+

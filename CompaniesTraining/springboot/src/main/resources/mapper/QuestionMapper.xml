@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hanz.mapper.QuestionMapper">
+    <resultMap id="BaseResultMap" type="com.hanz.entity.Question">
+        <id column="id" property="id" />
+        <result column="content" property="content" />
+        <result column="type" property="type" />
+        <result column="options" property="options" />
+        <result column="answer" property="answer" />
+        <result column="difficulty" property="difficulty" />
+        <result column="create_time" property="createTime" />
+    </resultMap>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT * FROM `question`
+        <where>
+            <if test="content != null and content != ''">
+                AND content LIKE CONCAT('%',#{content},'%')
+            </if>
+            <if test="type != null and type != ''">
+                AND type = #{type}
+            </if>
+        </where>
+        ORDER BY id DESC
+    </select>
+
+    <select id="selectTopicAll" resultMap="BaseResultMap">
+        SELECT * FROM `question`
+        ORDER BY create_time DESC
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO `question` (content, type, options, answer, difficulty)
+        VALUES (#{content}, #{type}, #{options}, #{answer}, #{difficulty})
+    </insert>
+
+    <update id="updateById">
+        UPDATE `question` SET
+                            content = #{content},
+                            type = #{type},
+                            options = #{options},
+                            answer = #{answer},
+                            difficulty = #{difficulty}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM `question` WHERE id = #{id}
+    </delete>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT * FROM `question` WHERE id = #{id}
+    </select>
+
+</mapper>

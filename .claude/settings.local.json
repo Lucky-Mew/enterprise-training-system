@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(java -version)",
+      "Bash(mvn -version)",
+      "Bash(npm -v)",
+      "Bash(mysql --version)",
+      "Bash(where java *)",
+      "Bash(where mvn *)",
+      "Bash(where node *)",
+      "Bash(where npm *)",
+      "Bash(where mysql *)",
+      "Bash(mysql *)",
+      "Bash(net start *)",
+      "Bash(sc query *)",
+      "Bash(mysqld --version)",
+      "Bash(mysqld --console --skip-grant-tables)",
+      "Bash(mysqld --console --port=3306)",
+      "Bash(taskkill //F //IM mysqld.exe)",
+      "Bash(mysqld --console --skip-grant-tables --shared-memory)",
+      "Bash(echo \"=== Password reset result: $? ===\")",
+      "Bash(mvn spring-boot:run)",
+      "Bash(echo \"Backend starting... PID: $!\")",
+      "Bash(npm run *)",
+      "Bash(echo \"Frontend starting... PID: $!\")",
+      "Bash(curl *)",
+      "Bash(echo \"=== Import result: $? ===\")",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}

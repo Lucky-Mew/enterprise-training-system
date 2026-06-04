@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "video.js": "^8.22.0"
+  },
+  "devDependencies": {
+    "sass": "^1.87.0",
+    "sass-loader": "^10.5.2"
+  }
+}

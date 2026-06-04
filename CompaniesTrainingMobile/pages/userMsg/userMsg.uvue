@@ -1,0 +1,230 @@
+<template>
+  <view class="container">
+    <!-- 搜索框 -->
+    <u-search 
+      style="margin: 20rpx 30rpx;"
+      v-model="name" 
+      placeholder="输入姓名搜索"
+      :show-action="true" 
+      action-text="搜索"
+      shape="square"
+      @search="handleSearch"
+    ></u-search>
+
+    <!-- 空数据提示 -->
+    <u-empty 
+      v-if="list.length === 0 && !loading" 
+      mode="list" 
+      icon="http://cdn.uviewui.com/uview/empty/list.png"
+      text="暂无相关用户"
+      marginTop="200"
+    />
+
+    <!-- 用户列表 -->
+    <scroll-view 
+      scroll-y 
+      style="height: calc(100vh - 180rpx);" 
+      @scrolltolower="loadMore"
+    >
+      <u-list>
+        <u-list-item 
+          v-for="(item, index) in list" 
+          :key="index"
+          bgColor="#fff"
+        >
+          <view class="user-card">
+            <!-- 头像部分 -->
+            <u-avatar 
+              :src="item.avatar || '/static/default-avatar.png'" 
+              size="80"
+              mode="aspectFill"
+              shape="circle"
+            ></u-avatar>
+            
+            <!-- 信息主体 -->
+            <view class="info-container">
+              <view class="info-row">
+                <text class="label">姓名：</text>
+                <text class="value">{{ item.name || '未知' }}</text>
+              </view>
+              
+              <view class="info-row">
+                <text class="label">电话：</text>
+                <text class="value">{{ item.phone || '未填写' }}</text>
+              </view>
+
+              <view class="info-row">
+                <text class="label">邮箱：</text>
+                <text class="value">{{ item.email || '未填写' }}</text>
+              </view>
+
+              <!-- 根据身份显示不同角标 -->
+              <u-tag 
+                v-if="item.role === 3"
+                text="VIP用户" 
+                type="warning"
+                size="mini"
+                :show="true"
+                style="position: absolute; right: 20rpx; top: 20rpx;"
+              />
+            </view>
+          </view>
+        </u-list-item>
+
+        <!-- 加载状态 -->
+        <u-loadmore 
+          :status="loadStatus" 
+          :loading-text="loadingText"
+          :loadmore-text="loadmoreText"
+          :nomore-text="nomoreText"
+        />
+      </u-list>
+    </scroll-view>
+  </view>
+</template>
+
+<script>
+	import {
+		getUserMsgPage
+		
+	} from '@/api/userMsg.js'
+
+	export default {
+		data() {
+			return {
+				user: [],
+				list: [],         // 数据列表
+				pageNum: 1,        // 当前页码
+				pageSize: 10,      // 每页数量
+				hasMore: true,     // 是否还有更多数据
+				loading: false,    // 防止重复请求
+				name: '',  // 搜索关键词
+				token: '',
+				loadStatus: 'loadmore',
+				loadingText: '正在加载...',
+				loadmoreText: '上拉加载更多',
+				nomoreText: '没有更多了',
+				popupVisible: false,
+				loadingDetail: false,
+				currentCourse: null
+			}
+		},
+		onLoad() {
+			this.user = JSON.parse(uni.getStorageSync('user'));
+			this.token = this.user.token
+			this.loadUserMsgData()
+		},
+
+		methods: {
+
+			// 加载课程数据
+			async loadUserMsgData() {
+			      if (this.loading || !this.hasMore) return
+			
+			      this.loading = true
+			      this.loadStatus = 'loading'
+			
+			      try {
+			        const params = {
+			          pageNum: this.pageNum,
+			          pageSize: this.pageSize,
+			          name: this.name,
+			          token: this.token,
+			          // 根据当前用户身份添加过滤条件
+			          role: this.user.role
+			        }
+			
+			        const res = await getUserMsgPage(params)
+			        const pageData = res.data || {}
+			
+			        const newList = pageData.list || []
+			        this.list = this.pageNum === 1 
+			          ? newList 
+			          : [...this.list, ...newList]
+			
+			        this.hasMore = this.pageNum < (pageData.pages || 0)
+			        this.loadStatus = this.hasMore ? 'loadmore' : 'nomore'
+			
+			        if (this.hasMore && newList.length) this.pageNum++
+			      } catch (error) {
+			        uni.showToast({ title: '加载失败', icon: 'none' })
+			      } finally {
+			        this.loading = false
+			      }
+			    },
+
+			handleSearch() {
+				// 重置时强制清空并重新加载
+				this.pageNum = 1;
+				this.hasMore = true;
+				this.list = [];
+				this.loadUserMsgData();
+				console.log("token", this.token)
+			},
+
+			// 加载更多
+			loadMore() {
+				if (this.hasMore && !this.loading) {
+					this.loadUserMsgData();
+				}
+			},
+
+			// 下拉刷新
+			onPullDownRefresh() {
+				this.pageNum = 1;
+				this.hasMore = true;
+				this.name = ''; // 可选：是否清空搜索条件
+
+				this.loadUserMsgData().finally(() => {
+					uni.stopPullDownRefresh();
+				});
+			}
+		}
+	}
+</script>
+
+<style scoped>
+.container {
+  background: #f5f7fa;
+}
+
+.user-card {
+  display: flex;
+  align-items: center;
+  padding: 30rpx;
+  margin: 20rpx;
+  background: #ffffff;
+  border-radius: 16rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.05);
+}
+
+.info-container {
+  flex: 1;
+  margin-left: 30rpx;
+  position: relative;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.label {
+  font-size: 28rpx;
+  color: #909399;
+  min-width: 100rpx;
+}
+
+.value {
+  font-size: 28rpx;
+  color: #303133;
+  word-break: break-all;
+  flex: 1;
+}
+
+/* 加载更多样式 */
+.u-loadmore {
+  padding: 30rpx 0;
+}
+</style>

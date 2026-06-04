@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hanz.mapper.TrainingTaskMapper">
+    <insert id="insert">
+        insert into `training_task` (training_plan_id, staff_user_id,staff_user_met_id, start_time, end_time, status)
+        values (#{trainingPlanId}, #{staffUserId}, #{staffUserMetId}, #{startTime}, #{endTime}, #{status})
+    </insert>
+
+    <select id="selectByStaffUserId" resultType="com.hanz.entity.TrainingTask">
+        SELECT
+            tt.*,
+            tp.title AS trainingPlanTitle,
+            su.name AS mentorName
+        FROM
+            `training_task` tt
+                JOIN
+            `training_plan` tp ON tt.training_plan_id = tp.id
+                JOIN
+            `staff_user` su ON tt.staff_user_met_id = su.id
+        WHERE
+            tt.staff_user_id = #{staffUserId}
+    </select>
+
+    <select id="selectWithSearch" resultType="com.hanz.entity.TrainingTask">
+        SELECT
+        tt.*,
+        tp.title AS trainingPlanTitle,
+        su.name AS staffUserName,  <!-- 新增学员姓名字段 -->
+        mentor.name AS mentorName
+        FROM
+        `training_task` tt
+        JOIN `training_plan` tp ON tt.training_plan_id = tp.id
+        JOIN `staff_user` su ON tt.staff_user_id = su.id  <!-- 联表获取学员姓名 -->
+        JOIN `staff_user` mentor ON tt.staff_user_met_id = mentor.id
+        <where>
+            <if test="trainingPlanTitle != null and trainingPlanTitle != ''">
+                AND tp.title LIKE CONCAT('%', #{trainingPlanTitle}, '%')
+            </if>
+            <if test="staffUserName != null and staffUserName != ''">
+                AND su.name LIKE CONCAT('%', #{staffUserName}, '%')
+            </if>
+        </where>
+        ORDER BY tt.id DESC
+    </select>
+
+    <update id="updateTask">
+        UPDATE `training_task`
+        SET status = #{status}, image_url = #{imageUrl}
+        WHERE id = #{id}
+    </update>
+
+    <select id="getTasksForMentor" resultType="com.hanz.entity.TrainingTask">
+        SELECT
+            tt.*,
+            tp.title AS trainingPlanTitle
+        FROM
+            `training_task` tt
+                JOIN
+            `training_plan` tp ON tt.training_plan_id = tp.id
+        WHERE
+            tt.staff_user_met_id = #{mentorId}
+          AND tt.status = 1
+    </select>
+</mapper>

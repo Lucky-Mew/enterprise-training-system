@@ -1,0 +1,294 @@
+<template>
+	<view class="container">
+		<!-- 搜索框 -->
+		<u-search style="margin-top: 10rpx;" v-model="title" placeholder="输入课程名称搜索" :show-action="true" action-text="搜索"
+			@search="handleSearch" @custom="handleSearch"></u-search>
+
+		<!-- 空数据提示 -->
+		<u-empty v-if="list.length === 0 && !loading" mode="data" icon="http://cdn.uviewui.com/uview/empty/data.png"
+			text="没有找到相关课程" />
+
+		<!-- 数据列表 -->
+		<scroll-view v-else scroll-y style="height: calc(100vh - 100rpx);" @scrolltolower="loadMore">
+			<u-list>
+				<u-list-item v-for="(item, index) in list" :key="index">
+					<view class="uni-row course-item">
+						<image :src="item.coverUrl" mode="aspectFill" class="cover"></image>
+						<view class="info">
+							<text class="title">{{ item.title }}</text>
+							<text class="synopsis">{{ item.synopsis }}</text>
+							<text class="time">{{ item.time }}</text>
+						</view>
+						<u-icon name="eye-fill" size="50rpx" @click="handleView(item)"></u-icon>
+					</view>
+				</u-list-item>
+
+				<!-- 加载状态提示 -->
+				<u-loadmore :status="loadStatus" :loading-text="loadingText" :loadmore-text="loadmoreText"
+					:nomore-text="nomoreText" />
+			</u-list>
+		</scroll-view>
+
+		<u-popup v-model="popupVisible" mode="center" width="600rpx" height="1200rpx" border-radius="20">
+			<view class="popup-content">
+				<!-- 加载状态提示 -->
+				<u-loading v-if="loadingDetail" mode="circle" size="40"></u-loading>
+
+				<!-- 数据内容 -->
+				<view v-else-if="currentCourse" class="uni-column course-item">
+					<image :src="currentCourse.coverUrl || '/static/default-cover.png'" class="cover_xq"></image>
+					<view class="info">
+						<text class="title_xq">课程名称：{{ currentCourse.title }}</text>
+						<text class="synopsis_xq">课程简介：{{ currentCourse.synopsis }}</text>
+						<text class="time_xq">发布时间：{{ currentCourse.createTime || '未知时间' }}</text>
+					</view>
+					<view>
+						<video id="myVideo" :src="currentCourse.videoUrl" controls 
+							v-if="currentCourse.videoUrl"></video>
+					</view>
+				</view>
+
+				<!-- 空数据提示 -->
+				<u-empty v-else mode="data" text="课程详情加载失败" />
+			</view>
+		</u-popup>
+	</view>
+</template>
+
+<script>
+	import {
+		getCoursePage
+		,
+		getCourseDetail
+	} from '@/api/course'
+
+	export default {
+		data() {
+			return {
+				user: [],
+				list: [],         // 数据列表
+				pageNum: 1,        // 当前页码
+				pageSize: 10,      // 每页数量
+				hasMore: true,     // 是否还有更多数据
+				loading: false,    // 防止重复请求
+				title: '',  // 搜索关键词
+				token: '',
+				loadStatus: 'loadmore',
+				loadingText: '正在加载...',
+				loadmoreText: '上拉加载更多',
+				nomoreText: '没有更多了',
+				popupVisible: false,
+				loadingDetail: false,
+				currentCourse: null
+			}
+		},
+		onLoad() {
+			this.user = JSON.parse(uni.getStorageSync('user'));
+			this.token = this.user.token
+			this.loadCourseData()
+		},
+
+		methods: {
+			// 加载课程详情
+			async handleView(row) {
+				try {
+					this.popupVisible = true
+					this.loadingDetail = true // 开始加载
+
+					// 确保参数正确性
+					if (!row?.id) throw new Error('无效的课程ID')
+
+					const res = await getCourseDetail(row.id, this.token)
+					console.log("res",res)
+
+					// 严格校验接口返回
+					if (res?.code === "200" && res.data) {
+						this.currentCourse = {
+							...res.data,
+							// 字段适配（确保字段名与接口一致）
+							coverUrl: res.data.coverUrl || '/static/default-cover.png',
+							createTime: this.formatTime(res.data.time)
+						}
+					} else {
+						throw new Error(res?.msg || '课程数据异常')
+					}
+				} catch (error) {
+					console.error('详情加载失败:', error)
+					this.currentCourse = null // 清空错误数据
+					uni.showToast({
+						title: error.message,
+						icon: 'none'
+					})
+				} finally {
+					this.loadingDetail = false // 结束加载
+				}
+			},
+
+			// 时间格式化方法
+			formatTime(timestamp) {
+				return timestamp ? this.$u.timeFormat(timestamp, 'yyyy-mm-dd') : '未知时间'
+			},
+
+			// 加载课程数据
+			async loadCourseData() {
+				if (this.loading || !this.hasMore) return;
+
+				this.loading = true;
+				this.loadStatus = 'loading';
+
+				try {
+					const res = await getCoursePage({
+						pageNum: this.pageNum,
+						pageSize: this.pageSize,
+						title: this.title,
+						token: this.token
+					});
+					const pageData = res.data || {};
+
+					console
+						.log('分页数据:', {
+							list: pageData.list,
+							pages: pageData.pages,
+							total: pageData.total
+						});
+
+					const newList = pageData.list || [];
+					const totalPages = pageData.pages || 0;
+
+					// 数据合并逻辑
+					if (this.pageNum === 1) {
+						this.list = newList;
+					} else {
+						this.list = [...this.list, ...newList];
+					}
+
+					// 分页控制（根据pages字段）
+					this.hasMore = this.pageNum < totalPages;
+					this.loadStatus = this.hasMore ? 'loadmore' : 'nomore';
+
+					// 仅在还有更多数据时递增页码
+					if (this.hasMore && newList.length > 0) {
+						this.pageNum++;
+					}
+
+				} catch (error) {
+					console
+						.error('请求失败:', error);
+					uni
+						.showToast({
+							title: error.data?.msg || '加载失败',
+							icon: 'none'
+						});
+					this.loadStatus = 'loadmore';
+				} finally {
+					this.loading = false;
+				}
+				console.log("title", this.title)
+			},
+
+			handleSearch() {
+				// 重置时强制清空并重新加载
+				this.pageNum = 1;
+				this.hasMore = true;
+				this.list = [];
+				this.loadCourseData();
+				console.log("token", this.token)
+			},
+
+			// 加载更多
+			loadMore() {
+				if (this.hasMore && !this.loading) {
+					this.loadCourseData();
+				}
+			},
+
+			// 下拉刷新
+			onPullDownRefresh() {
+				this.pageNum = 1;
+				this.hasMore = true;
+				this.title = ''; // 可选：是否清空搜索条件
+
+				this.loadCourseData().finally(() => {
+					uni.stopPullDownRefresh();
+				});
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	.course-item {
+		display: flex;
+		padding: 20rpx;
+		border-bottom: 1rpx solid #eee;
+	}
+
+	.cover {
+		width: 200rpx;
+		height: 150rpx;
+		border-radius: 8rpx;
+	}
+
+	.cover_xq {
+		width: 550rpx;
+		height: 300rpx;
+		border-radius: 8rpx;
+	}
+
+	.info {
+		flex: 1;
+		margin-left: 20rpx;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.title {
+		font-size: 28rpx;
+		font-weight: bold;
+		margin-bottom: 10rpx;
+	}
+
+	.title_xq {
+		font-size: 50rpx;
+		font-weight: bold;
+		margin-bottom: 20rpx;
+	}
+
+	.synopsis {
+		font-size: 24rpx;
+		color: #666;
+		margin-bottom: 8rpx;
+		word-break: break-all;
+	}
+
+	.synopsis_xq {
+		font-size: 30rpx;
+		color: #666;
+		margin-bottom: 50rpx;
+		word-break: break-all;
+	}
+
+	.time {
+		font-size: 22rpx;
+		color: #999;
+	}
+
+	.time_xq {
+		font-size: 22rpx;
+		color: #999;
+	}
+	
+	.popup-content {
+  padding: 30rpx;
+  height: 100%;
+  position: relative;
+}
+
+/* 视频容器样式 */
+video {
+  width: 100%;
+  height: 400rpx;
+  margin-top: 20rpx;
+  border-radius: 12rpx;
+}
+</style>

@@ -1,0 +1,407 @@
+<template>
+  <view class="container">
+    <!-- 搜索框 -->
+    <view class="search-box">
+      <u-search
+        v-model="searchKeyword"
+        placeholder="输入培训计划标题搜索"
+        :show-action="true"
+        action-text="搜索"
+        @search="handleSearch"
+        @custom="handleSearch"
+        shape="square"
+        bg-color="#fff"
+        search-icon-color="#999"
+      ></u-search>
+    </view>
+
+    <!-- 数据表格 -->
+    <view class="table-container">
+      <u-table class="custom-table">
+        <u-tr class="header-row">
+          <u-th width="140">计划ID</u-th>
+          <u-th flex="2">计划标题</u-th>
+          <u-th width="200">开始时间</u-th>
+          <u-th width="200">结束时间</u-th>
+          <u-th width="140">状态</u-th>
+          <u-th width="160">操作</u-th>
+        </u-tr>
+        <u-tr v-for="item in taskList" :key="item.id" class="data-row">
+          <u-td>{{ item.trainingPlanId }}</u-td>
+          <u-td class="title-cell">{{ item.trainingPlanTitle }}</u-td>
+          <u-td>{{ formatTime(item.startTime) }}</u-td>
+          <u-td>{{ formatTime(item.endTime) }}</u-td>
+          <u-td>
+            <view class="status-tag" :class="'status-' + item.status">
+              {{ formatStatus(item.status) }}
+            </view>
+          </u-td>
+          <u-td>
+            <u-button 
+              size="mini" 
+              @click="showDetail(item)"
+              plain
+              hairline
+              color="#409EFF"
+            >详情</u-button>
+          </u-td>
+        </u-tr>
+      </u-table>
+    </view>
+
+    <!-- 分页 -->
+    <view class="pagination-wrapper">
+      <u-pagination
+        v-model="currentPage"
+        :page-count="totalPages"
+        :total="total"
+        :page-size="pageSize"
+        @change="pageChange"
+        prev-text="上一页"
+        next-text="下一页"
+        :active-color="primaryColor"
+      ></u-pagination>
+    </view>
+
+    <!-- 详情弹窗 -->
+    <u-modal 
+      v-model="showDetailModal" 
+      :show-cancel-button="false"
+      title="任务详情" 
+      width="86%"
+      :zoom="true"
+      :mask-close-able="true"
+    >
+      <view class="modal-content">
+        <view class="info-card">
+          <view class="info-item">
+            <text class="info-label">计划标题</text>
+            <text class="info-value">{{ currentTask.trainingPlanTitle }}</text>
+          </view>
+          <view class="info-item">
+            <text class="info-label">开始时间</text>
+            <text class="info-value">{{ formatTime(currentTask.startTime) }}</text>
+          </view>
+          <view class="info-item">
+            <text class="info-label">结束时间</text>
+            <text class="info-value">{{ formatTime(currentTask.endTime) }}</text>
+          </view>
+          <view class="info-item">
+            <text class="info-label">当前状态</text>
+            <view class="status-tag" :class="'status-' + currentTask.status">
+              {{ formatStatus(currentTask.status) }}
+            </view>
+          </view>
+        </view>
+
+        <!-- 图片上传 -->
+        <view v-if="currentTask.status === 0" class="upload-section">
+          <text class="section-title">成果提交</text>
+          <u-upload
+            :action="uploadUrl"
+            :header="{token: user.token}"
+            @on-success="uploadSuccess"
+            :max-count="1"
+            :preview-full-image="true"
+            :deletable="true"
+            :show-progress="true"
+          ></u-upload>
+        </view>
+
+        <view v-if="currentTask.status === 0" class="submit-section">
+          <u-button 
+            type="primary" 
+            @click="submitTask" 
+            :disabled="!currentTask.imageUrl"
+            shape="circle"
+            :custom-style="{
+              width: '200rpx',
+              height: '80rpx',
+              fontSize: '32rpx'
+            }"
+          >提交审核</u-button>
+        </view>
+      </view>
+    </u-modal>
+  </view>
+</template>
+
+<script>
+import request from '@/utils/request.js'
+
+export default {
+  data() {
+    return {
+      searchKeyword: '',
+      taskList: [],
+      currentPage: 1,
+      pageSize: 10,
+      total: 0,
+      totalPages: 0,
+      showDetailModal: false,
+      currentTask: {},
+      uploadUrl: 'http://localhost:9999/trainingTask/uploadImage',
+      user: {}
+    }
+  },
+  onLoad() {
+    this.user = JSON.parse(uni.getStorageSync('user') || '{}');
+    this.loadTasks()
+  },
+  methods: {
+    // 加载任务数据
+    async loadTasks() {
+      try {
+        const res = await request({
+          url: '/trainingTask/getTasksPage',
+          method: 'GET',
+          data: {
+            pageNum: this.currentPage,
+            pageSize: this.pageSize,
+            trainingPlanTitle: this.searchKeyword
+          },
+          header: { token: this.user.token }
+        })
+        
+        this.taskList = res.data.list || []
+		console.log(this.taskList)
+        this.total = res.data.total
+        this.totalPages = Math.ceil(this.total / this.pageSize)
+      } catch (error) {
+        uni.showToast({ title: '加载失败', icon: 'none' })
+      }
+    },
+
+    // 显示详情
+    showDetail(task) {
+      this.currentTask = { ...task }
+      this.showDetailModal = true
+    },
+
+    // 上传成功处理
+    uploadSuccess(res) {
+      if (res.code === '200') {
+        this.currentTask.imageUrl = res.data
+        uni.showToast({ title: '上传成功' })
+      }
+    },
+
+    // 提交任务
+    async submitTask() {
+      try {
+        await request({
+          url: '/trainingTask/submitTask',
+          method: 'POST',
+          header: { token: this.user.token },
+          data: {
+            id: this.currentTask.id,
+            imageUrl: this.currentTask.imageUrl,
+            status: 1
+          }
+        })
+        
+        uni.showToast({ title: '提交成功' })
+        this.showDetailModal = false
+        this.loadTasks()
+      } catch (error) {
+        uni.showToast({ title: '提交失败', icon: 'none' })
+      }
+    },
+
+    // 状态格式化
+    formatStatus(status) {
+      const statusMap = { 0: '未完成', 1: '待审核', 2: '已完成' }
+      return statusMap[status] || '未知状态'
+    },
+
+    // 状态颜色
+    getStatusStyle(status) {
+      const colorMap = { 0: '#b80227', 1: '#0a6bb6', 2: '#059e07' }
+      return `color: ${colorMap[status] || '#333'}`
+    },
+
+    // 时间格式化
+    formatTime(timeStr) {
+      return timeStr ? timeStr.replace('T', ' ') : '-'
+    },
+
+    // 分页变化
+    pageChange(page) {
+      this.currentPage = page
+      this.loadTasks()
+    },
+
+    // 搜索处理
+    handleSearch() {
+      this.currentPage = 1
+      this.loadTasks()
+    }
+  }
+}
+</script>
+
+<style scoped lang="scss">
+	@mixin text-ellipsis($lines: 1) {
+	  display: -webkit-box;
+	  -webkit-box-orient: vertical;
+	  -webkit-line-clamp: $lines;
+	  overflow: hidden;
+	  text-overflow: ellipsis;
+	}
+	
+/* 主容器 */
+.container {
+  padding: 30rpx;
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+/* 搜索框区域 */
+.search-box {
+  margin-bottom: 30rpx;
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.04);
+}
+
+/* 表格容器 */
+.table-container {
+  background: #fff;
+  border-radius: 12rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.04);
+  margin-bottom: 30rpx;
+}
+
+/* 表格样式 */
+.custom-table {
+  .header-row {
+    background: #f8fafc !important;
+    th {
+      font-weight: 500;
+      color: #606266;
+      font-size: 28rpx;
+      padding: 28rpx 0;
+    }
+  }
+  
+  .data-row {
+    td {
+      color: #303133;
+      font-size: 26rpx;
+      padding: 24rpx 0;
+      border-bottom: 1rpx solid #f0f2f5;
+    }
+    
+    &:last-child td {
+      border-bottom: none;
+    }
+  }
+  
+  .title-cell {
+    @include text-ellipsis(2);
+    line-height: 1.4;
+  }
+}
+
+/* 状态标签 */
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 8rpx 20rpx;
+  border-radius: 24rpx;
+  font-size: 24rpx;
+  font-weight: 500;
+  
+  &.status-0 {
+    background: #fee2e2;
+    color: #dc2626;
+  }
+  &.status-1 {
+    background: #dbeafe;
+    color: #2563eb;
+  }
+  &.status-2 {
+    background: #dcfce7;
+    color: #16a34a;
+  }
+}
+
+/* 分页样式 */
+.pagination-wrapper {
+  background: #fff;
+  padding: 30rpx;
+  border-radius: 12rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.04);
+}
+
+/* 弹窗内容 */
+.modal-content {
+  padding: 20rpx 0;
+  
+  .info-card {
+    background: #fff;
+    border-radius: 12rpx;
+    padding: 24rpx;
+    margin-bottom: 30rpx;
+    box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
+    
+    .info-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 24rpx;
+      &:last-child {
+        margin-bottom: 0;
+      }
+      
+      .info-label {
+        width: 160rpx;
+        color: #909399;
+        font-size: 28rpx;
+        font-weight: 500;
+      }
+      
+      .info-value {
+        flex: 1;
+        color: #303133;
+        font-size: 28rpx;
+        line-height: 1.4;
+      }
+    }
+  }
+  
+  .upload-section {
+    padding: 24rpx;
+    background: #fff;
+    border-radius: 12rpx;
+    margin-bottom: 30rpx;
+    
+    .section-title {
+      display: block;
+      color: #303133;
+      font-size: 30rpx;
+      font-weight: 500;
+      margin-bottom: 20rpx;
+    }
+  }
+  
+  .submit-section {
+    text-align: center;
+    margin-top: 40rpx;
+  }
+}
+
+/* 按钮优化 */
+.u-btn--primary {
+  transition: all 0.3s;
+  &:active {
+    transform: scale(0.98);
+  }
+  
+  &[disabled] {
+    opacity: 0.6;
+    filter: grayscale(0.5);
+  }
+}
+</style>

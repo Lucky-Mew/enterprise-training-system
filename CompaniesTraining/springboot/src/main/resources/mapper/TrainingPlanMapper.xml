@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hanz.mapper.TrainingPlanMapper">
+    <select id="selectAll" resultType="com.hanz.entity.TrainingPlan">
+        SELECT
+        tp.*,
+        c.title AS courseTitle
+        FROM `training_plan` tp
+        LEFT JOIN `course` c ON tp.course_id = c.id
+        <where>
+            <if test="title != null and title != ''">AND tp.title LIKE CONCAT('%',#{title},'%')</if>
+        </where>
+        ORDER BY tp.id DESC
+    </select>
+
+    <insert id="insert">
+        insert into `training_plan` (title,content,course_id,start_time,end_time)
+        values (#{title}, #{content},#{courseId}, #{startTime}, #{endTime})
+    </insert>
+
+    <update id="updateById">
+        update `training_plan` set title = #{title},content = #{content},course_id = #{courseId},
+                                   start_time = #{startTime},end_time = #{endTime},status = #{status},creator_id = #{creatorId}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from `training_plan` where id = #{id}
+    </delete>
+</mapper>

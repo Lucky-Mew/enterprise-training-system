@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+**/target/
+**/unpackage/
+
+# IDE
+.idea/
+**/.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Uploads (运行时上传的文件，不需要入库)
+CompaniesTraining/uploads/
+CompaniesTraining/files/
+
+# SQL file (数据库文件太大，不需要上传)
+文件/companies_training.sql
+
+# Docx files (论文文件不需要上传)
+文件/*.docx

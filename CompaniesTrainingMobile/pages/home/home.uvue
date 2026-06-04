@@ -1,0 +1,238 @@
+<template>
+	<view class="uni-column main">
+		<view class="layout">
+			<view class="header">
+				<u-swiper height="100vh" :list="list.slice(0,5)"></u-swiper>
+			</view>
+		</view>
+		<view class="notice">
+			<u-notice-bar type='warning' volume-icon='true' more-icon='true' mode="horizontal"
+				:list="noticeList"></u-notice-bar>
+		</view>
+		<view class="layout">
+			<view class="uni-row footer">
+				<view class="uni-column">
+					<view class="button1" @click="clickNotice()">课程</view>
+					<view v-if="user.role === '2' " class="button2" @click="clickUserMsg()">学员信息</view>
+					<view v-if="user.role === '3' " class="button2" @click="clickUserMsg()">导师信息</view>
+				</view>
+				<view v-if="user.role === '2' " class="uni-column">
+					<view class="button_stu3 " @click="clickTrainingPlan()">培训计划</view>
+					<view class="button_stu4" @click="clickTrainingTask()">培训完成情况</view>
+				</view>
+				<view v-if="user.role === '3' " class="uni-column">
+					<view class="button_stu3" @click="clickStuBankList()">测试题</view>
+					<view class="button_stu4" @click="clickStuUserTask()">培训任务</view>
+				</view>
+
+			</view>
+		</view>
+	</view>
+</template>
+
+<script>
+	import { selectAll, selectNotice } from '@/api/home.js'
+
+	export default {
+		data() {
+			return {
+				user: [],
+				list: [],
+				noticeList: []
+			}
+		},
+		onLoad() {
+			this.user = JSON.parse(uni.getStorageSync('user'));
+			console.log(111111111111111)
+			console.log(this.user);
+			console.log(this.user.role);
+
+			selectAll(this.user).then(res => {
+				console.log(res)
+				if (res.code === "200" && Array.isArray(res.data)) {
+					// 遍历 data 数组，将每个对象的 coverUrl 提取出来添加到 this.list 中
+					res.data.forEach(item => {
+						if (item.coverUrl) {
+							this.list.push(item.coverUrl);
+						}
+					});
+				}
+				console.log(this.list);
+			}).catch(error => {
+				console.error('请求出错:', error);
+			});
+
+			selectNotice(this.user).then(res => {
+				console.log(res)
+				if (res.code === "200" && Array.isArray(res.data)) {
+					// 遍历 data 数组，将每个对象的 content 提取出来添加到 this.noticeList 中
+					res.data.forEach(item => {
+						if (item.content) {
+							this.noticeList.push(item.content);
+						}
+					});
+				}
+				console.log(this.noticeList);
+			}).catch(error => {
+				console.error('请求出错:', error);
+			});
+
+		},
+		methods: {
+			clickNotice() {
+				uni.navigateTo({
+					url: "/pages/course/course"
+				})
+			},
+			clickUserMsg() {
+				uni.navigateTo({
+					url: "/pages/userMsg/userMsg"
+				})
+			},
+			clickTrainingPlan() {
+				uni.navigateTo({
+					url: "/pages/trainingPlan/trainingPlan"
+				})
+			},
+			clickTrainingTask() {
+				uni.navigateTo({
+					url: "/pages/trainingTaskCompletion/trainingTaskCompletion"
+				})
+			},
+			clickStuBankList() {
+				uni.navigateTo({
+					url: "/pages/stuBankList/stuBankList"
+				})
+			},
+			clickStuUserTask() {
+				uni.navigateTo({
+					url: "/pages/stuUserTask/stuUserTask"
+				})
+			}
+		}
+	}
+</script>
+
+<style>
+	.main {
+		width: 100%;
+		height: 100vh;
+	}
+
+	.layout {
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+	}
+
+	.header {
+		width: 730rpx;
+		height: 25vh;
+		background-color: #fff;
+		margin-top: 10rpx;
+		border-radius: 10rpx;
+	}
+
+	.footer {
+		width: 730rpx;
+		height: 75vh;
+		margin-top: 10rpx;
+		background-color: #fff;
+	}
+
+	.notice {
+		width: 750rpx;
+		height: 5vh;
+	}
+
+	.button1 {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 350rpx;
+		height: 350rpx;
+		font-size: 50rpx;
+		margin-right: 10rpx;
+		margin-bottom: 10rpx;
+		border-radius: 10rpx;
+		background-color: #1F6ED5;
+		color: #fff;
+	}
+	.button2 {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 350rpx;
+		height: 350rpx;
+		font-size: 50rpx;
+		margin-right: 10rpx;
+		border-radius: 10rpx;
+		background-color: #681FD5;
+		color: #fff;
+	}
+	.button_stu3 {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 350rpx;
+		height: 350rpx;
+		font-size: 50rpx;
+		margin-right: 10rpx;
+		margin-bottom: 10rpx;
+		border-radius: 10rpx;
+		background-color: #35AF10;
+		color: #fff;
+	}
+	.button_stu4 {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 350rpx;
+		height: 350rpx;
+		font-size: 50rpx;
+		margin-right: 10rpx;
+		border-radius: 10rpx;
+		background-color: #D0C915;
+		color: #fff;
+	}
+	
+	.button_ter3 {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 350rpx;
+			height: 230rpx;
+			font-size: 50rpx;
+			margin-right: 10rpx;
+			margin-bottom: 10rpx;
+			border-radius: 10rpx;
+			background-color: #35AF10;
+			color: #fff;
+		}
+	.button_ter4 {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 350rpx;
+			height: 230rpx;
+			font-size: 50rpx;
+			margin-right: 10rpx;
+			margin-bottom: 10rpx;
+			border-radius: 10rpx;
+			background-color: #D0C915;
+			color: #fff;
+		}
+	.button_ter5 {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: 350rpx;
+			height: 230rpx;
+			font-size: 50rpx;
+			margin-right: 10rpx;
+			margin-bottom: 10rpx;
+			border-radius: 10rpx;
+			background-color: #DC4416;
+			color: #fff;
+		}
+</style>

@@ -1,0 +1,553 @@
+<template>
+	<view class="container">
+		<u-search style="margin-top: 10rpx;" v-model="keyword" placeholder="输入题库名称搜索" :show-action="true"
+			action-text="搜索" @search="handleSearch" @custom="handleSearch"></u-search>
+
+		<u-empty v-if="bankList.length === 0 && !loading" mode="data" icon="http://cdn.uviewui.com/uview/empty/data.png"
+			text="没有找到相关题库" />
+
+		<scroll-view v-else scroll-y style="height: calc(100vh - 200rpx);" @scrolltolower="loadMore">
+			<u-list>
+				<u-list-item v-for="(item, index) in bankList" :key="item.id">
+					<view class="uni-row bank-item">
+						<view class="info">
+							<text class="title">题库名称：{{ item.title }}</text>
+							<text class="synopsis">题库描述：{{ item.description }}</text>
+							<!-- 新增分数显示 -->
+							<view class="action-area">
+								<text v-if="item.score !== undefined" class="score">
+									得分：{{ item.score }}/{{ item.total }}
+								</text>
+								<u-button v-else type="primary" size="mini"
+									@click="startAnswer(item.id)">开始答题</u-button>
+								<u-button v-if="item.answered" type="info" size="mini"
+									@click="showAnswerDetails(item.id)">查看详情</u-button>
+							</view>
+						</view>
+					</view>
+				</u-list-item>
+
+				<u-loadmore :status="loadStatus" />
+			</u-list>
+		</scroll-view>
+
+		<!-- 答题弹窗 -->
+		<u-modal v-model="showAnswerModal" :title="'题库：' + currentBankTitle" width="90%" :show-confirm-button="false">
+			<scroll-view scroll-y style="max-height: 70vh; padding: 20rpx;">
+				<view v-for="(q, index) in questions" :key="q.id" class="question-item">
+					<view class="question-header">
+						<text class="question-order">第 {{ index + 1 }} 题：</text>
+						<text class="question-content">{{ q.content }}</text>
+						<u-tag :text="formatType(q.type)" :type="getTagType(q.type)" size="mini" />
+					</view>
+
+					<!-- 单选题 -->
+					<radio-group v-if="q.type === 'SINGLE'" @change="(e) => setAnswer(q.id, e.detail.value)">
+						<view v-for="(opt, idx) in formatOptions(q.options)" :key="idx" class="option-item">
+							<label class="option-label">
+								<radio :value="String.fromCharCode(65 + idx)"
+									:checked="answers[q.id] === String.fromCharCode(65 + idx)" color="#2979ff" />
+								<text class="option-text">
+									{{ String.fromCharCode(65 + idx) }}. {{ opt }}
+								</text>
+							</label>
+						</view>
+					</radio-group>
+
+					<!-- 多选题 -->
+					<checkbox-group v-else-if="q.type === 'MULTIPLE'"
+						@change="(e) => setMultiAnswer(q.id, e.detail.value)">
+						<view v-for="(opt, idx) in formatOptions(q.options)" :key="idx" class="option-item">
+							<label class="option-label">
+								<checkbox :value="String.fromCharCode(65 + idx)"
+									:checked="answers[q.id]?.includes(String.fromCharCode(65 + idx))" color="#2979ff" />
+								<text class="option-text">
+									{{ String.fromCharCode(65 + idx) }}. {{ opt }}
+								</text>
+							</label>
+						</view>
+					</checkbox-group>
+
+					<!-- 判断题 -->
+					<radio-group v-else @change="(e) => setAnswer(q.id, e.detail.value)">
+						<view class="option-item">
+							<label class="option-label">
+								<radio value="T" :checked="answers[q.id] === 'T'" color="#2979ff" />
+								<text class="option-text">正确</text>
+							</label>
+						</view>
+						<view class="option-item">
+							<label class="option-label">
+								<radio value="F" :checked="answers[q.id] === 'F'" color="#2979ff" />
+								<text class="option-text">错误</text>
+							</label>
+						</view>
+					</radio-group>
+				</view>
+
+				<view class="button-group">
+				            <u-button type="default" shape="circle" @click="showAnswerModal = false" 
+				                     style="margin-right: 20rpx;">取消</u-button>
+				            <u-button type="primary" shape="circle" @click="submitAnswers" 
+				                     :loading="submitting">提交答案</u-button>
+				        </view>
+			</scroll-view>
+		</u-modal>
+
+		<!-- 答题详情弹窗 -->
+		<u-modal v-model="showDetailModal" title="答题详情" width="90%">
+			<scroll-view scroll-y style="max-height: 70vh; padding: 20rpx;">
+				<view v-for="(detail, idx) in answerDetails" :key="idx" class="detail-item">
+					<text class="question">{{ idx + 1 }}. {{ detail.question }}</text>
+					<view class="answer-line">
+						<text class="answer-label">你的答案：</text>
+						<text class="answer-value">{{ detail.userAnswer || '未回答' }}</text>
+					</view>
+					<view class="answer-line">
+						<text class="answer-label">正确答案：</text>
+						<text class="answer-value correct-answer">{{ detail.correctAnswer }}</text>
+					</view>
+					<view :class="['result-tag', detail.correct ? 'correct' : 'wrong']">
+						{{ detail.correct ? '正确' : '错误' }}
+					</view>
+				</view>
+			</scroll-view>
+		</u-modal>
+	</view>
+</template>
+
+<script>
+	import request from '@/utils/request.js'
+
+	export default {
+		data() {
+			return {
+				user: {},
+				bankList: [],
+				pageNum: 1,
+				pageSize: 10,
+				hasMore: true,
+				loading: false,
+				keyword: '',
+				loadStatus: 'loadmore',
+				loadingText: '正在加载...',
+				loadmoreText: '上拉加载更多',
+				nomoreText: '没有更多了',
+				showAnswerModal: false,
+				showDetailModal: false,
+				currentBankId: null,
+				currentBankTitle: '',
+				questions: [],
+				answers: {},
+				submitting: false,
+				answerDetails: []
+			}
+		},
+		onLoad() {
+			this.user = JSON.parse(uni.getStorageSync('user') || '{}')
+			this.loadBankData()
+		},
+		methods: {
+			// 时间格式化
+			formatTime(timestamp) {
+				return timestamp ? this.$u.timeFormat(timestamp, 'yyyy-mm-dd HH:MM') : '-'
+			},
+
+			formatType(type) {
+				const typeMap = {
+					SINGLE: '单选题',
+					MULTIPLE: '多选题',
+					JUDGMENT: '判断题'
+				};
+				return typeMap[type] || '未知题型';
+			},
+
+			getTagType(type) {
+				const typeStyle = {
+					SINGLE: 'primary',
+					MULTIPLE: 'success',
+					JUDGMENT: 'warning'
+				};
+				return typeStyle[type] || 'info';
+			},
+
+			setAnswer(questionId, value) {
+				this.$set(this.answers, questionId, value);
+			},
+
+			setMultiAnswer(questionId, values) {
+				this.$set(this.answers, questionId, values.sort());
+			},
+
+			formatOptions(options) {
+				try {
+					// 尝试处理不同格式的选项数据
+					if (options.startsWith('[')) {
+						return JSON.parse(options)
+					}
+					return options.split(',').map(opt => opt.trim().replace(/^"+|"+$/g, ''))
+				} catch (e) {
+					return options.split(',').map(opt => opt.trim())
+				}
+			},
+
+			// 新增方法
+			async startAnswer(bankId) {
+				this.currentBankId = bankId
+				try {
+					const res = await request({
+						url: `/questionBank/${bankId}/questions`,
+						method: 'GET',
+						header: { token: this.user.token }
+					})
+					this.questions = res.data || []
+					const bank = this.bankList.find(b => b.id === bankId)
+					this.currentBankTitle = bank?.title || ''
+					this.showAnswerModal = true
+					console.log(this.questions)
+				} catch (error) {
+					uni.showToast({ title: '获取题目失败', icon: 'none' })
+				}
+			},
+
+			selectAnswer(questionId, value) {
+				this.$set(this.answers, questionId, value)
+			},
+
+			async submitAnswers() {
+			    // 处理多选题答案格式
+			    const formatted = {};
+			    for (const [qid, ans] of Object.entries(this.answers)) {
+			        formatted[qid] = Array.isArray(ans) ? ans.join(',') : ans;
+			    }
+			
+			    if (Object.keys(this.answers).length !== this.questions.length) {
+			        return uni.showToast({ title: '请完成所有题目', icon: 'none' });
+			    }
+			
+			    this.submitting = true;
+			    try {
+			        const res = await request({
+			            url: '/answer/submit',
+			            method: 'POST',
+			            header: { token: this.user.token },
+			            data: {
+			                userId: this.user.id,
+			                bankId: this.currentBankId,
+			                answers: formatted
+			            }
+			        });
+			
+			        // 根据实际接口结构调整判断条件
+			        if (res.code === '200' || res.code === 'SUCCESS') { 
+			            uni.showToast({
+			                title: `得分：${res.data.score}/${res.data.total}`,
+			                icon: 'none',
+			                duration: 3000
+			            });
+			
+			            // 更安全的更新方式（保持原有属性）
+			            this.bankList = this.bankList.map(bank => {
+			                if (bank.id === this.currentBankId) {
+			                    return {
+			                        ...bank,  // 保留原有属性
+			                        score: res.data.score,
+			                        total: res.data.total,
+			                        answered: true
+			                    };
+			                }
+			                return bank;
+			            });
+			
+			            // 重置答案和关闭弹窗
+			            this.answers = {};
+			            this.showAnswerModal = false;
+			            
+			            // 强制视图更新
+			            this.$forceUpdate();
+			        } else {
+			            uni.showToast({
+			                title: res.msg || '提交失败',
+			                icon: 'none'
+			            });
+			        }
+			    } catch (error) {
+			        console.error('提交失败:', error);
+			        uni.showToast({
+			            title: error.message || '提交失败',
+			            icon: 'none'
+			        });
+			    } finally {
+			        this.submitting = false;
+			    }
+			},
+
+			async showAnswerDetails(bankId) {
+				try {
+					const res = await request({
+						url: `/answer/details/${this.user.id}/${bankId}`,
+						header: { token: this.user.token }
+					})
+					this.answerDetails = res.data || []
+					this.showDetailModal = true
+				} catch (error) {
+					uni.showToast({ title: '获取详情失败', icon: 'none' })
+				}
+			},
+
+			// 加载题库数据
+			async loadBankData() {
+				if (this.loading || !this.hasMore) return;
+
+				this.loading = true;
+				this.loadStatus = 'loading';
+
+				try {
+					const [bankRes, scoreRes] = await Promise.all([
+						request({
+							url: '/questionBank/list',
+							method: 'GET',
+							data: {
+								page: this.pageNum,
+								pageSize: this.pageSize,
+								keyword: this.keyword
+							},
+							header: { token: this.user.token }
+						}),
+						request({
+							url: `/score/user/${this.user.id}`,
+							header: { token: this.user.token }
+						})
+					]);
+
+					// 合并分数数据
+					const scoreMap = (scoreRes.data || []).reduce((map, s) => {
+						map[s.bankId] = {
+							score: s.score,
+							total: s.total,
+							answered: true
+						};
+						return map;
+					}, {});
+
+					const newList = bankRes.data.records || [];
+					this.bankList = this.bankList.concat(newList.map(bank => ({
+						...bank,
+						...scoreMap[bank.id] || {}
+					})));
+
+					// 从接口响应中获取总数
+					const total = bankRes.data.total || 0;
+					this.hasMore = this.pageNum * this.pageSize < total;
+					this.loadStatus = this.hasMore ? 'loadmore' : 'nomore';
+
+					if (newList.length > 0) {
+						this.pageNum++;
+					}
+				} catch (error) {
+					console.error('加载失败:', error);
+					uni.showToast({
+						title: error.message || '请求失败',
+						icon: 'none'
+					});
+					this.loadStatus = 'loadmore';
+				} finally {
+					this.loading = false;
+				}
+			},
+
+			// 搜索处理
+			handleSearch() {
+				this.pageNum = 1
+				this.hasMore = true
+				this.bankList = []
+				this.loadBankData()
+			},
+
+			// 加载更多
+			loadMore() {
+				if (this.hasMore && !this.loading) {
+					this.loadBankData()
+				}
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	
+	/* 新增按钮组样式 */
+	.button-group {
+	    display: flex;
+	    justify-content: flex-end;
+	    margin-top: 40rpx;
+	    padding: 20rpx 0;
+	}
+	
+	.container {
+		padding: 20rpx;
+		background-color: #f8f9fa;
+	}
+
+	.bank-item {
+		background: #fff;
+		border-radius: 16rpx;
+		padding: 28rpx;
+		margin-bottom: 24rpx;
+		box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.06);
+	}
+
+	.title {
+		font-size: 32rpx;
+		font-weight: 600;
+		color: #303133;
+		margin-bottom: 16rpx;
+		display: block;
+	}
+
+	.synopsis {
+		font-size: 26rpx;
+		color: #606266;
+		line-height: 1.6;
+		margin-bottom: 12rpx;
+		display: block;
+	}
+
+	.creator {
+		font-size: 24rpx;
+		color: #909399;
+		flex: 1;
+	}
+
+	.action-area {
+		margin-top: 20rpx;
+		display: flex;
+		gap: 20rpx;
+		align-items: center;
+	}
+
+	.score {
+		color: #e6a23c;
+		font-weight: bold;
+	}
+
+	.question-item {
+		margin-bottom: 40rpx;
+		padding: 30rpx;
+		background: #fff;
+		border-radius: 16rpx;
+		box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+	}
+	
+	.question-header {
+		display: flex;
+		align-items: center;
+		gap: 20rpx;
+		margin-bottom: 30rpx;
+	}
+	
+	.question-order {
+		font-size: 28rpx;
+		font-weight: bold;
+		color: #303133;
+	}
+	
+	.question-content {
+		flex: 1;
+		font-size: 28rpx;
+		color: #606266;
+	}
+
+	.question-title {
+		font-size: 32rpx;
+		font-weight: 600;
+		color: #303133;
+		line-height: 1.6;
+		margin-bottom: 30rpx;
+		display: block;
+	}
+
+	.options-group {
+		display: flex;
+		flex-direction: column;
+		gap: 20rpx;
+	}
+
+	.option-item {
+		padding: 20rpx;
+		margin: 15rpx 0;
+		background: #f8f9fa;
+		border-radius: 12rpx;
+	}
+	
+	.option-label {
+		display: flex;
+		align-items: center;
+		gap: 20rpx;
+	}
+
+	.option-radio {
+		transform: scale(0.9);
+		margin-right: 20rpx;
+	}
+
+	.option-text {
+		font-size: 28rpx;
+		color: #606266;
+	}
+
+	.option-letter {
+		color: #2979ff;
+		font-weight: bold;
+		margin-right: 12rpx;
+	}
+
+	/* 答题详情样式 */
+	.detail-item {
+		padding: 30rpx;
+		background: #fff;
+		border-radius: 16rpx;
+		margin-bottom: 24rpx;
+	}
+
+	.answer-line {
+		display: flex;
+		align-items: baseline;
+		margin: 15rpx 0;
+	}
+
+	.answer-label {
+		font-size: 28rpx;
+		color: #909399;
+		min-width: 140rpx;
+	}
+
+	.answer-value {
+		font-size: 28rpx;
+		color: #606266;
+		flex: 1;
+	}
+
+	.correct-answer {
+		color: #19be6b;
+		font-weight: 500;
+	}
+
+	.result-tag {
+		padding: 8rpx 20rpx;
+		border-radius: 8rpx;
+		font-size: 24rpx;
+		margin-top: 15rpx;
+		display: inline-block;
+	}
+
+	.correct {
+		background: #e1f3d8;
+		color: #19be6b;
+	}
+
+	.wrong {
+		background: #fde2e2;
+		color: #fa3534;
+	}
+</style>

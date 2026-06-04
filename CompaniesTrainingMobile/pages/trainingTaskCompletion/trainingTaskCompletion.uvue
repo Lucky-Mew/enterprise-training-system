@@ -1,0 +1,363 @@
+<template>
+  <view class="container">
+    <!-- 搜索框 -->
+    <u-search 
+      style="margin-top: 10rpx;" 
+      v-model="title" 
+      placeholder="输入培训任务名称搜索" 
+      :show-action="true" 
+      action-text="搜索"
+      @search="handleSearch" 
+      @custom="handleSearch"
+    ></u-search>
+
+    <!-- 空数据提示 -->
+    <u-empty 
+      v-if="taskList.length === 0 && !loading" 
+      mode="data" 
+      icon="http://cdn.uviewui.com/uview/empty/data.png"
+      text="没有找到相关培训完成情况" 
+    />
+
+    <!-- 数据列表 -->
+    <scroll-view 
+      v-else 
+      scroll-y 
+      style="height: calc(100vh - 100rpx);" 
+      @scrolltolower="loadMore"
+    >
+      <u-list>
+        <u-list-item v-for="(item, index) in taskList" :key="item.id">
+          <view class="uni-row Task-item">
+            <view class="info">
+              <text class="title">任务名称：{{ item.trainingPlanTitle }}</text>
+              <text class="synopsis">学员：{{ item.staffUserName }}</text>
+              <text class="synopsis">
+                完成状态：{{ getStatusText(item.status) }}
+              </text>
+              <div class="uni-row">
+                <text class="startTime">提交时间：{{ formatTime(item.startTime) }}</text>
+                <text class="endTime">截止时间：{{ formatTime(item.endTime) }}</text>
+              </div>
+              <!-- 审核按钮 -->
+              <view v-if="item.status != 0" class="action-btn">
+                <u-button
+                  size="mini"
+                  type="primary"
+                  @click="showReviewModal(item)"
+                >审核</u-button>
+              </view>
+            </view>
+          </view>
+        </u-list-item>
+
+        <!-- 加载状态提示 -->
+        <u-loadmore 
+          :status="loadStatus" 
+          :loading-text="loadingText" 
+          :loadmore-text="loadmoreText"
+          :nomore-text="nomoreText" 
+        />
+      </u-list>
+    </scroll-view>
+
+    <!-- 审核弹窗 -->
+    <u-modal 
+      v-model="showReview" 
+      :show-cancel-button="true"
+      :async-close="true"
+      title="任务审核"
+      @confirm="submitReview"
+      @cancel="cancelReview"
+    >
+      <view class="review-content">
+        <view class="info-line">
+          <text class="label">任务名称：</text>
+          <text class="value">{{ currentTask.trainingPlanTitle }}</text>
+        </view>
+        <view class="info-line">
+          <text class="label">学员姓名：</text>
+          <text class="value">{{ currentTask.staffUserName }}</text>
+        </view>
+        <view class="info-line">
+          <text class="label">提交时间：</text>
+          <text class="value">{{ formatTime(currentTask.startTime) }}</text>
+        </view>
+        <view class="info-line">
+          <text class="label">截止时间：</text>
+          <text class="value">{{ formatTime(currentTask.endTime) }}</text>
+        </view>
+        <view class="info-line">
+          <text class="label">提交材料：</text>
+          <image 
+            :src="currentTask.imageUrl" 
+            mode="aspectFit" 
+            class="material-img"
+            @click="previewImage(currentTask.imageUrl)"
+          />
+        </view>
+        <view class="radio-group">
+          <radio-group @change="handleReviewChange">
+            <label class="radio-item">
+              <radio value="2" color="#2979ff" /> 通过
+            </label>
+            <label class="radio-item">
+              <radio value="0" color="#2979ff" /> 不通过
+            </label>
+          </radio-group>
+        </view>
+      </view>
+    </u-modal>
+  </view>
+</template>
+
+<script>
+import { getTrainingTasks } from '@/api/trainingTask.js'
+import request from '@/utils/request.js'
+
+export default {
+  data() {
+    return {
+      user: {},
+      taskList: [],
+      pageNum: 1,
+      pageSize: 10,
+      hasMore: true,
+      loading: false,
+      title: '',
+      loadStatus: 'loadmore',
+      // 审核相关状态
+      showReview: false,
+      currentTask: {},
+      reviewResult: null
+    }
+  },
+  onLoad() {
+    this.user = JSON.parse(uni.getStorageSync('user') || '{}')
+    this.loadTaskData()
+  },
+  methods: {
+    // 显示审核弹窗
+    showReviewModal(task) {
+      this.currentTask = { ...task }
+      this.reviewResult = null
+      this.showReview = true
+    },
+
+    // 处理审核选择
+    handleReviewChange(e) {
+      this.reviewResult = parseInt(e.detail.value)
+    },
+
+    // 提交审核
+    async submitReview() {
+      if (this.reviewResult === null) {
+        uni.showToast({ title: '请选择审核结果', icon: 'none' })
+        return
+      }
+
+      try {
+        const res = await request({
+          url: '/trainingTask/reviewTask',
+          method: 'POST',
+          data: {
+            id: this.currentTask.id,
+            status: this.reviewResult,
+            
+          },
+		  header:{token: this.user.token}
+        })
+		console.log('res',res)
+        if (res.code === '200') {
+          uni.showToast({ title: '审核提交成功' })
+          // 更新本地数据
+          const index = this.taskList.findIndex(item => item.id === this.currentTask.id)
+          if (index > -1) {
+            this.$set(this.taskList, index, {
+              ...this.currentTask,
+              status: this.reviewResult
+            })
+          }
+          this.showReview = false
+        } else {
+          uni.showToast({ title: res.msg || '审核提交失败', icon: 'none' })
+        }
+      } catch (error) {
+        console.error('审核提交失败:', error)
+        uni.showToast({ title: '网络请求失败', icon: 'none' })
+      }
+    },
+
+    // 取消审核
+    cancelReview() {
+      this.showReview = false
+      this.currentTask = {}
+      this.reviewResult = null
+    },
+
+    // 图片预览
+    previewImage(url) {
+      uni.previewImage({
+        urls: [url],
+        current: 0
+      })
+    },
+
+    // 时间格式化
+    formatTime(timestamp) {
+      return timestamp ? this.$u.timeFormat(timestamp, 'yyyy-mm-dd HH:MM') : '未提交'
+    },
+
+    // 状态映射
+    getStatusText(status) {
+      const statusMap = {
+        0: '未完成',
+        1: '待审核',
+        2: '已完成'
+      }
+      return statusMap[status] || '未知状态'
+    },
+
+    // 加载数据
+    async loadTaskData() {
+      if (this.loading || !this.hasMore) return
+
+      this.loading = true
+      this.loadStatus = 'loading'
+
+      try {
+        const res = await getTrainingTasks({
+          pageNum: this.pageNum,
+          pageSize: this.pageSize,
+          title: this.title,
+          token: this.user.token
+        })
+
+        const pageData = res.data || {}
+        const newList = pageData.list || []
+        const totalPages = pageData.pages || 0
+
+        if (this.pageNum === 1) {
+          this.taskList = newList
+        } else {
+          this.taskList = [...this.taskList, ...newList]
+        }
+
+        this.hasMore = this.pageNum < totalPages
+        this.loadStatus = this.hasMore ? 'loadmore' : 'nomore'
+
+        if (newList.length > 0) {
+          this.pageNum++
+        }
+      } catch (error) {
+        console.error('加载失败:', error)
+        uni.showToast({
+          title: error.message || '请求失败',
+          icon: 'none'
+        })
+        this.loadStatus = 'loadmore'
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // 搜索处理
+    handleSearch() {
+      this.pageNum = 1
+      this.hasMore = true
+      this.taskList = []
+      this.loadTaskData()
+    },
+
+    // 加载更多
+    loadMore() {
+      if (this.hasMore && !this.loading) {
+        this.loadTaskData()
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+.container {
+  padding: 20rpx;
+  background-color: #f8f9fa;
+}
+
+.Task-item {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.06);
+}
+
+.title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 16rpx;
+  display: block;
+}
+
+.synopsis {
+  font-size: 26rpx;
+  color: #606266;
+  line-height: 1.6;
+  margin-bottom: 12rpx;
+  display: block;
+}
+
+.startTime, .endTime {
+  font-size: 24rpx;
+  color: #909399;
+  flex: 1;
+}
+
+.action-btn {
+  margin-top: 20rpx;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.review-content {
+  padding: 30rpx 20rpx;
+}
+
+.info-line {
+  display: flex;
+  margin-bottom: 20rpx;
+  line-height: 1.6;
+}
+
+.label {
+  width: 160rpx;
+  color: #606266;
+}
+
+.value {
+  flex: 1;
+  color: #303133;
+  word-break: break-all;
+}
+
+.material-img {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 8rpx;
+  margin-top: 10rpx;
+}
+
+.radio-group {
+  margin-top: 30rpx;
+  padding-left: 160rpx;
+}
+
+.radio-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+  font-size: 28rpx;
+}
+</style>
