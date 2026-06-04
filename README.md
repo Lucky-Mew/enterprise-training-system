@@ -8,6 +8,24 @@
 ## 🖼️ 系统截图
 
 > *（待补充：登录页、首页 Dashboard、课程管理、培训计划下发、在线答题等核心页面截图）*
+> 登录页
+<img width="1920" height="945" alt="image" src="https://github.com/user-attachments/assets/1ba3724c-ea9c-467f-bd11-1841642f77e9" />
+> 首页
+<img width="423" height="218" alt="image" src="https://github.com/user-attachments/assets/9bc680e1-5e54-4fee-a218-471013605ade" />
+> 课程管理
+<img width="411" height="187" alt="image" src="https://github.com/user-attachments/assets/b07de9ad-4448-4fed-b3c6-a18154f09c90" />
+> 用户管理
+<img width="1920" height="945" alt="image" src="https://github.com/user-attachments/assets/5cc8c604-5289-4e1e-97e5-c6865ef277f0" />
+> 培训计划下发
+<img width="1920" height="945" alt="image" src="https://github.com/user-attachments/assets/959b8a70-0195-4d30-ba15-11f9d1465540" />
+> 小程序登录页
+<img width="200" height="287" alt="image" src="https://github.com/user-attachments/assets/6cd893bd-89dc-417a-8257-6c4d49147232" />
+> 小程序首页
+<img width="176" height="353" alt="image" src="https://github.com/user-attachments/assets/9853953b-9279-4287-9555-182eb522c7a1" />
+> 小程序培训计划
+<img width="253" height="411" alt="image" src="https://github.com/user-attachments/assets/44dab318-73dc-463c-b82e-7f79129ea26e" />
+
+
 
 ---
 
